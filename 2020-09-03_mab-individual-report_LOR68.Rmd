@@ -1,0 +1,248 @@
+---
+title: 'Monoclonal antibody individual report (`r i`)'
+author: "Rodrigo Arcoverde"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r logo-individual, echo=FALSE}
+htmltools::img(src = knitr::image_uri(file.path(R.home("doc"), "html", "logo.jpg")), 
+               alt = 'logo', 
+               style = 'position:absolute; top:0; right:0; padding:10px;')
+```
+---
+
+This report includes a individualized reports of `r i` monoclonal antibody. It includes warnings regarding the quality of the sequences and possible mismatches, quality scores, quality of gene assignments, and pairwise alignments.
+
+```{r library-individual, include=FALSE, warning=FALSE, echo=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = F,fig.width=12, fig.height=8)
+library(kableExtra)
+library(Biostrings)
+library(openxlsx)
+library(dplyr)
+library(ggmsa)
+
+```
+
+
+## mAb warnings & flags
+
+Here you can find a table showing the name of the mAb and quality assessment. In the table, `0` represents `FALSE` and `1` represents `TRUE`. The mismatches in the beginning and in the end of the heavy or light chains are based in the comparison between unique motifs present in the germline amino acid (aa) sequences and the mAb aa sequences. The evalue and coverage are based in the output from igDiscover software and a `1` value is given when the real value is higher than the 75th percentile (evalue) or lower than the 25th percentile (coverage). This way, it warns if the sequence is among the worst 25% sequences. Finally, the last row is the sum of all the warnings 
+
+```{r reading-function-indivdual, echo=FALSE, results='hide'}
+#reading fasta files containing the patterns 
+HV_unique <- readAAStringSet("~/Box Sync/RSV NGS/mAb_QC/unique_variants/HV_unique.fasta")
+HJ_unique <- readAAStringSet("~/Box Sync/RSV NGS/mAb_QC/unique_variants/HJ_unique.fasta")
+LV_unique <- readAAStringSet("~/Box Sync/RSV NGS/mAb_QC/unique_variants/LV_unique.fasta")
+LJ_unique <- readAAStringSet("~/Box Sync/RSV NGS/mAb_QC/unique_variants/LJ_unique.fasta")
+HC_all <- readAAStringSet(
+  "~/Box Sync/RSV NGS/mAb_QC/mAb-reports/LOR68_recheck/recheck_LOR68_HC.txt")
+LC_all <- readAAStringSet(
+  "~/Box Sync/RSV NGS/mAb_QC/mAb-reports/LOR68_recheck/recheck_LOR68_LC.txt")
+
+df <- read.xlsx(
+  "~/Box Sync/RSV NGS/v4_Analysis/LOR mAbs/200810 mAb clones.xlsx",
+  sheet = 2)
+df<- df[df$mAb.ID == "LOR68",]
+#creating the function to print errors
+mab_check <- function(LC_seqs, LV_pattern, LJ_pattern,
+                      HC_seqs, HV_pattern, HJ_pattern, df_scores){
+  if (missing(LC_seqs)) {
+    warning("Please add all the 7 necessary arguments")
+  }
+  if (any(names(HC_seqs) != names(LC_seqs))) {
+    warning("Heavy chain and light chain names do not match.")
+  }
+  if (any(df$mAb.ID != names(LC_seqs))) {
+    warning("Monoclonal antibody names do not match.") 
+  }
+    mab<- data.frame(name = names(HC_seqs))
+    mab$mismatch_start_LC <- ifelse(
+      !BStringSet(LC_seqs, start=1, end = 8) %in% LV_pattern,
+      1, 0)
+    mab$mismatch_end_LC <- ifelse(
+      !BStringSet(LC_seqs, start=-8, end = -1) %in% LJ_pattern,
+      1, 0)
+    mab$mismatch_start_HC <- ifelse(
+      !BStringSet(HC_seqs, start=1, end = 8) %in% HV_pattern,
+      1, 0)
+    mab$mismatch_end_HC <- ifelse(
+      !BStringSet(HC_seqs, start=-8, end = -1) %in% HJ_pattern,
+      1, 0)
+    mab$HV_coverage <- ifelse(df_scores$HV.coverage < 99, 1 , 0)
+    mab$HV_evalue <- ifelse (df_scores$HV.evalue < 2.52e-114, 1 , 0)
+    mab$HJ_coverage <- ifelse (df_scores$HJ.coverage < 85.4, 1 , 0)
+    mab$HJ_evalue <- ifelse (df_scores$HJ.evalue < 4.49e-17, 1 , 0)
+    mab$LV_coverage <- ifelse (df_scores$LV.coverage < 99, 1 , 0)
+    mab$LV_evalue <- ifelse (df_scores$LV.evalue < 3.51e-113, 1 , 0)
+    mab$LJ_coverage <- ifelse (df_scores$LJ.coverage < 92.1, 1 , 0)
+    mab$LJ_evalue <- ifelse (df_scores$LJ.evalue < 9.61e-14, 1 , 0)
+  return(mab)
+  print(mab)
+}
+ 
+ 
+ab <- mab_check(LC_all, LV_unique, LJ_unique,
+          HC_all, HV_unique, HJ_unique, df)
+ab <- ab %>% filter(name == i)
+#separing table outside function because it is faster
+
+ mab_heavy <- ab %>% select(name, mismatch_start_HC,
+                            mismatch_end_HC, HV_coverage, 
+                            HJ_coverage, HV_evalue, HJ_evalue) 
+ mab_heavy <- cbind(mab_heavy,Total = rowSums(mab_heavy[,2:ncol(mab_heavy)]))
+ 
+ mab_light <- ab %>% select(name, mismatch_start_LC,
+                            mismatch_end_LC, LV_coverage, 
+                            LJ_coverage, LV_evalue, LJ_evalue) 
+ mab_light <- cbind(mab_light, Total = rowSums(mab_light[,2:ncol(mab_light)]))
+```
+### Heavy and light chain warnings
+```{r table_heavy, echo=FALSE}
+
+kable(t(mab_heavy)) %>%
+  kable_styling(full_width = FALSE, position = "float_left", bootstrap_options = "striped") %>%
+  row_spec(which(t(mab_heavy)[,1] > 0), bold = T, color = "white", background = "#FA8072")
+
+
+kable(t(mab_light)) %>%
+  kable_styling(full_width = FALSE, position = "center", , bootstrap_options = "striped") %>%
+  row_spec(which(t(mab_light)[,1] > 0), bold = T, color = "white", background = "#FA8072")
+
+```
+
+
+
+### Heavy chain paiwise alignment
+
+
+
+```{r heavy-alignment-individual, echo=FALSE, warning = FALSE,message=FALSE, fig.height=1, fig.width=10}
+
+hc <- readAAStringSet("~/Box Sync/RSV NGS/v4_Analysis/LOR mAbs/AA sequences/LOR-HC.fasta")
+hc_uca <- readAAStringSet("~/Box Sync/RSV NGS/v4_Analysis/LOR mAbs/AA sequences/LOR-HC-UCA copy.fasta")
+
+heavy_chain <- pairwiseAlignment(hc_uca[paste0(i,"-UCA")], hc[i], type = "global",
+                    gapOpening = 10,
+                    gapExtension = 4)
+heavy_chain
+p <- alignedSubject(heavy_chain)
+p1 <- alignedPattern(heavy_chain)
+
+
+g1 <- ggmsa(c(p,p1), color = 'Zappo_AA',
+            seq_name = T)
+print(g1)
+
+```
+  
+
+
+### Light chain pairwise alignment
+
+
+```{r light-alignment-individual, echo=FALSE, warning = FALSE,message=FALSE, fig.height=1, fig.width=10}
+
+lc <- readAAStringSet("~/Box Sync/RSV NGS/mAb_QC/mAb-reports/LOR68_recheck/recheck_LOR68_LC.txt")
+lc_uca <- readAAStringSet("~/Box Sync/RSV NGS/v4_Analysis/LOR mAbs/AA sequences/LOR-LC-UCA copy.fasta")
+
+light_chain <- pairwiseAlignment(lc_uca[paste0(i,"-UCA")], lc[i], type = "global",
+                    gapOpening = 10,
+                    gapExtension = 4)
+light_chain
+p2 <- alignedSubject(light_chain)
+p3 <- alignedPattern(light_chain)
+
+
+g2 <- ggmsa(c(p2,p3), color = 'Zappo_AA',
+            seq_name = T, font = 2)
+
+print(g2)
+
+```
+
+
+### Statistics
+#### Quality scores & Alleles
+
+Basic quality scores of the `r i` mAb. It includes from which well the sequence came from, assigned alleles, coverage of assignment, and evalues.
+
+```{r table-quality-individual, echo=FALSE, fig.height=2, fig.width=10, fig.align='center'}
+table_mab <- read.xlsx("~/Box Sync/RSV NGS/v4_Analysis/LOR mAbs/200810 mAb clones.xlsx", sheet = 2)
+table_mab_heavy <- table_mab %>% filter(mAb.ID == i) %>% select(mAb.ID, Well.ID, HV.allele, HJ.allele, HV.coverage, HJ.coverage, HV.evalue, HJ.evalue) %>% t()
+table_mab_light <- table_mab %>% filter(mAb.ID == i) %>% select(mAb.ID, Well.ID, LV.allele, LJ.allele, LV.coverage, LJ.coverage, LV.evalue, LJ.evalue) %>% t()
+
+kable(table_mab_heavy) %>%
+  kable_styling(full_width = F, position = "float_left", bootstrap_options = "striped") 
+kable(table_mab_light) %>%
+  kable_styling(full_width = F, position = "center", , bootstrap_options = "striped") 
+
+```
+
+
+#### `r i` Sneak Peek
+Basic information of the `r i` mAb. It includes from which rank group the sequence belongs to, vaccine group, CDR3 amino acid length, heavy and light chain somatic hypermutations percentage (SHM).
+
+```{r table-shm-individual, echo=FALSE, fig.height=2, fig.width=10}
+table_mab_shm <- read.xlsx("~/Box Sync/RSV NGS/v4_Analysis/LOR mAbs/200810 mAb clones.xlsx", sheet = 1)
+table_mab_shm_filter <- table_mab_shm %>% select (mAb.ID, mAb.group, Specificity, Vaccine, `CDR3.length.(aa)`,	`VH.SHM.(#nt)`, `VL.SHM.(#nt)`) %>% 
+  filter(mAb.ID == i) %>% t()
+
+kable(table_mab_shm_filter,
+      caption = "Monoclonal antibody information") %>% 
+  kable_styling(bootstrap_options = "striped", 
+                full_width = T, 
+                position = "center")
+
+```
+
+
+```{r chromatogram-individual, echo=FALSE, include=FALSE, eval=FALSE}
+#plot chromatogram from the sequences
+ls <- list.files(full.names = T, "~/Box Sync/Rodrigo & Klara & Sebastian/Raw data/Sanger sequencing/Public/rechecking_public")
+library(sangerseqR)
+
+sangerseqlisted <- sapply(ls, readsangerseq) 
+mapply(FUN = secondary.peaks, 
+       s = sangerseqlisted, 
+       file.prefix = lapply(ls, function(x) str_split_fixed(x, "/", 10)[10]), 
+       MoreArgs = list(output.folder = "~/Box Sync/Rodrigo & Klara & Sebastian/Quality reports/Light_chains/public_clones/rechecking", ratio = 0.5))
+
+
+```
+
+
+
+```{r fasta-individual, echo=FALSE, eval=FALSE, warning=FALSE}
+lc <- read.csv("~/Box Sync/RSV NGS/CureVac COVID19/processing/LC/sanger_filtered.csv")
+lc <- lc %>% select(file_ID, sequence)
+lc$file_ID <- as.character(lc$file_ID)
+lc$sequence <- as.character(lc$sequence)
+
+dataframe2fas(lc, file = "~/Box Sync/RSV NGS/CureVac COVID19/processing/LC/LC_all.fasta")
+
+#do this only if the first option did not work
+filtered.filepath.animal <- as.character(merged_summary_csv$file.path)
+sangerseqfiltered.animal <- sapply(filtered.filepath.animal, readsangerseq)
+sangerbasecallfasta.animal <- sapply(sangerseqfiltered.animal, primarySeq)
+name_fasta.animal <-   merged_summary_csv %>% mutate(name = paste(file_ID,sep = "_",specificity))
+names(sangerbasecallfasta.animal) <- name_fasta.animal$name
+
+setwd("/Users/rodri/Desktop/sanger_HC/fasta/")
+write.dna(sangerbasecallfasta.animal, 
+          file = paste(i,".fasta",sep = ""), 
+          format = 'fasta', 
+          nbcol = -1, 
+          colsep = "",
+          colw = 10000000)
+```
+
+
+
+##### R session information
+```{r info-invididual}
+sessionInfo()
+```
+
