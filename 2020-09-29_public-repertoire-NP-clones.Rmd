@@ -1,0 +1,243 @@
+---
+title: ""
+author: "Rodrigo Arcoverde Cerveira"
+date: '`r format(Sys.Date(), "%Y-%m-%d")`'
+output: html_document
+abstract: Short project description.
+knit: (function(inputFile, encoding) {
+          rmarkdown::render(inputFile,
+                            encoding = encoding, 
+                            output_file = paste0(
+                              xfun::sans_ext(inputFile), '_', Sys.Date(), '.html'),
+                                output_dir = "../results/lab_book/")})
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(echo = TRUE,
+                     root.dir = getwd(),
+                     fig.width = 6, fig.height = 5,
+                     warning = FALSE, 
+                     message = FALSE)
+
+result.dir <- paste0("results/",Sys.Date(),"/")
+
+## creates result.dir with date in if not existent
+ifelse(isFALSE(dir.exists(paste0("../",result.dir))), dir.create(paste0("../",result.dir),recursive = TRUE),"Result directory for today exists already!")
+options(stringsAsFactors = FALSE) 
+```
+
+## Needed libraries
+```{r libraries, message=FALSE}
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(cowplot)
+library(stringr)
+```
+
+## Load data
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+setwd("~/Box Sync/public_repertoire/results/2020-09-13/")
+ls <- list.files("public-tables", full.names = T)
+ls <- grep("2020-09-13" ,ls,value = T)
+ls <- grep("summary" ,ls,value = T)
+ls
+ls <- lapply(ls,read.csv)
+names(ls) <- c("B1","B2","IgM")
+df <- rbindlist(ls,idcol=T, fill = T)
+
+#combining animals
+rem_dup.one <- function(x){
+  paste(unique(toupper(trimws(unlist(strsplit(x,split="(?!')[ [:punct:]]",fixed=F,perl=T))))),collapse = ", ")
+}
+rem_dup.vector <- Vectorize(rem_dup.one,USE.NAMES = F)
+
+df_f <- df %>% 
+  mutate(combined_animals = paste0(animals_rep_seq, sep = ", ", animals_sc)) 
+
+df_f$combined_animals <- rem_dup.vector(df_f$combined_animals)
+df_f$combined_animals <- gsub(", , ", ", ",df_f$combined_animals)
+df_f$.id <- gsub("IgM", "PV", df_f$.id)
+df_f$sequence <- sub("+", "",df_f$sequence)
+df_comb <- df_f %>% mutate(number_animals_combined = str_count(combined_animals, "E"))
+groups <- data.frame(NP = c("E11", "E16", "E17", "E23", "E24"),
+                     SOL = c("E12", "E14", "E18", "E21", NA))
+ff = function(x, patterns, replacements = patterns, fill = NA, ...)
+{
+  stopifnot(length(patterns) == length(replacements))
+  
+  ans = rep_len(as.character(fill), length(x))    
+  empty = seq_along(x)
+  
+  for(i in seq_along(patterns)) {
+    greps = grepl(patterns[[i]], x[empty], ...)
+    ans[empty[greps]] = replacements[[i]]  
+    empty = empty[!greps]
+  }
+  
+  return(ans)
+}
+df_comb$NP <- ff(df_comb$combined_animals, 
+                     patterns = c("E11", "E16", "E17", "E23", "E24"), 
+                     replacements = c("NP","NP","NP","NP","NP"))
+df_comb$SOL <- ff(df_comb$combined_animals, 
+                  patterns = c("E12", "E14", "E18", "E21"), 
+                  replacements = c("SOL","SOL","SOL","SOL"))
+
+df_comb <- df_comb %>%
+  mutate(Groups = ifelse(!is.na(df_comb$NP) & !is.na(df_comb$SOL),
+                         "Both",
+                         ifelse(!is.na(df_comb$NP) & is.na(df_comb$SOL),
+                                "NP",
+                                ifelse(is.na(df_comb$NP) & !is.na(df_comb$SOL),
+                                       "SOL", ""))))
+filtered <- df_comb %>% filter(Groups == "NP" & number_animals_combined >= 2)
+
+
+```
+## Plots and Statistics public clones NP group
+Data mining of the public clones found in >= 2 animals within the nanoparticle group.
+
+```{r plot_1, warning = FALSE}
+set.seed(10)
+df_comb$.id <- factor(df_comb$.id ,levels = c("PV", "B1", "B2"))
+g1 <- df_comb %>%
+  ggplot(aes(x = .id, y = number_animals_combined, size = size_rep_seq,
+             color = Groups)) +
+  geom_point(position = "jitter") +
+  scale_color_manual(values = c("#107F01","#065386", "#5C003C"))
+
+g2 <- g1 + theme_cowplot() + xlab("") +ylab("Number of animals") +
+  labs(size = "Clone size") + theme(legend.position = "right") +
+  scale_size_continuous(breaks = c (10, 100,1000,10000), limits = c(0,10000))+
+  scale_y_continuous(breaks = c(2,3,4,5,6,7,8,9)) 
+
+g3 <- g2 + geom_vline(xintercept=c(-3,1.5), linetype="dotted") +
+  geom_vline(xintercept=c(-3,2.5), linetype="dotted")
+
+#plotting with lines connecting the points
+df_comb_jit <- transform(df_comb, dmeasure =  jitter(as.numeric(as.factor(.id)), 2),
+jvalue = jitter(number_animals_combined, amount = .2) )
+
+g10 <- ggplot(df_comb_jit, aes(x = .id, y = jvalue, size = size_rep_seq, 
+                               color = Groups ) ) +
+  geom_blank() +
+  geom_line(aes(group = clone, x = dmeasure),color = "grey",size = 1, alpha = .4)+
+  geom_point( aes(x = dmeasure)) 
+g10 + theme_cowplot() + xlab("") +ylab("Number of animals") +
+  labs(size = "Clone size") + theme(legend.position = "right") +
+  scale_color_manual(values = c("#107F01","#065386", "#5C003C"))+
+  scale_size_continuous(breaks = c (10, 100,1000,10000), limits = c(0,10000))+
+  scale_y_continuous(breaks = c(2,3,4,5,6,7,8,9)) + geom_vline(xintercept=c(-3,1.5), linetype="dotted") +
+  geom_vline(xintercept=c(-3,2.5), linetype="dotted")
+```
+```{r data_prep}
+#function to create clonoquery file first
+.clono_full <- function(z){
+ls <- list.files(z, full.names = T)
+ls <- grep("full.txt", ls, value = T)
+print(ls)
+  if(length(ls) != 9) {
+    stop("Folder not containing 9 files, please check the number of files or change the function to allow a different number of files.")
+  }
+  if(any(!grepl("full",ls))){
+    stop("Files in the folder are not identified as a full file in its name.")
+  }
+  else{
+    x <- lapply(ls, fread, fill = T)
+    names(x) <- c("E11", "E12", "E14", "E16", "E17", "E18", "E21", "E23", "E24")
+    x <- lapply(x, function (x) x[!apply(is.na(x) | x == "", 1, all),])       
+    x_all <- do.call(rbind, x)
+#getting the clonoquery named properly, all clones queries, aka full table
+    x_m_full <- x_all %>% 
+      mutate(grp = cumsum(grepl("Query",name))) %>%
+      group_by(grp) %>% 
+      mutate(clonoquery = ifelse(row_number() > 1, first(name), name)) %>%
+      ungroup() %>% 
+      select(-c(grp)) %>%
+      relocate(clonoquery) %>%
+      mutate(clone = substr(clonoquery, 10,14))
+    }
+return(x_m_full)
+}
+
+###### COMBINING CLONOQUERY FULL v4_NGS TR1 #######
+clonoquery_full_B2 <- .clono_full(
+  "~/Box Sync/RSV NGS/v4_Analysis/v4_public-repertoire/analysis/v4/results/2020-09-13/clonoquery/B2")
+
+###### COMBINING CLONOQUERY FULL v4_B1-D14 #######
+clonoquery_full_B1 <- .clono_full(
+  "~/Box Sync/RSV NGS/v4_Analysis/v4_public-repertoire/analysis/v4/results/2020-09-13/clonoquery/B1")
+
+###### COMBINING CLONOQUERY FULL igM #######
+clonoquery_full_igm <- .clono_full(
+  "~/Box Sync/RSV NGS/v4_Analysis/v4_public-repertoire/analysis/v4/results/2020-09-13/clonoquery/IgM/")
+
+##### Combining all the clonoquery full files into a single file #######
+## output as CSV file with a new column for time_point
+
+combined_full <- list(clonoquery_full_igm, clonoquery_full_B1, clonoquery_full_B2)
+names(combined_full) <- c("PV", "B1", "B2") 
+combined_full  <- rbindlist(combined_full, idcol = T, fill = T)  
+combined_full  <- combined_full %>% rename(time_point = .id) %>% filter(count > 0)
+
+filtered_np <- merge(filtered, combined_full, by = "clone")
+filtered_np <- filtered_np %>%
+  mutate(E11_and_E16 = ifelse(grepl("^E11, E16$",combined_animals),"YES", "NO"))
+
+```
+
+```{r plot_3}
+
+filtered_grouped <- filtered_np %>% group_by(clone) %>% add_tally %>% summarise_all(list(mean), na.rm = TRUE) 
+
+
+filtered_grouped <- filtered_np %>% 
+  mutate(spec = ifelse(grepl("(?=.*DP)(?=.*PreF)", sequence, perl = T), "Both",ifelse(grepl("PreF",sequence, perl = T), "PreF", "DP"))) %>%
+  group_by(combined_animals, clone, spec, E11_and_E16) %>% tally() %>% 
+  group_by(E11_and_E16, spec) %>% tally()
+
+filtered_grouped %>% ggplot(aes(x = E11_and_E16, y = n, fill = spec)) + 
+  geom_bar(stat = "identity", position = "dodge", width = .5)
+
+
+filtered_grouped_nona <- filtered_grouped %>% select(where(~!all(is.na(.)))) %>%   select(-c(FR1_SHM,FR2_SHM,FR3_SHM, FR4_SHM, FR1_aa_mut,FR2_aa_mut,FR3_aa_mut))
+
+library(PCAtools)
+metadata <- data.frame(filtered_grouped_nona$combined_animals)
+colnames(metadata) <- "combined_animals"
+rownames(metadata)
+rownames(metadata) 
+x <- as.matrix(select_if(filtered_grouped_nona[,-1], is.numeric))
+rownames(x) <- filtered_grouped_nona$combined_animals
+
+p <- PCAtools::pca(x)
+p
+biplot(p)
+
+
+pairs(x)
+tiff("~/Box Sync/public_repertoire/results/pair_plot.tiff")
+heatmap(x, scale = "column")
+
+ggpairs(filtered_grouped_nona, columns = 4:21, 
+        ggplot2::aes(colour=E11_and_E16, alpha = 0.7)) 
+
+```
+```{r plot_4}
+
+
+```
+
+## Take environment snapshot 
+```{r}
+renv::snapshot()
+```
+
+
+## SessionInfo
+```{r}
+sessionInfo()
+```
+
