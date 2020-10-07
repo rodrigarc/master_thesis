@@ -34,18 +34,24 @@ library(dplyr)
 library(tidyr)
 library(cowplot)
 library(stringr)
+library(ggtree)
+library(treeio)
+library(seqRFLP)
+library(Biostrings)
+library(msa)
+library(treeio)
+
 ```
 
 ## Load data
 ```{r message=FALSE, warning=FALSE, echo=FALSE}
-setwd("~/Box Sync/public_repertoire/results/2020-09-13/")
-ls <- list.files("public-tables", full.names = T)
-ls <- grep("2020-09-13" ,ls,value = T)
-ls <- grep("summary" ,ls,value = T)
-ls
-ls <- lapply(ls,read.csv)
-names(ls) <- c("B1","B2","IgM")
-df <- rbindlist(ls,idcol=T, fill = T)
+#binding summary tables
+ls <- list.files("~/Box Sync/public_repertoire/results/2020-09-13/public-tables", full.names = T)
+ls <- grep("summary", ls, value = T)
+df <- lapply(ls, read.csv)
+names(df) <- c("B1", "B2", "PV")
+df <- rbindlist(df, idcol = T)
+
 
 #combining animals
 rem_dup.one <- function(x){
@@ -53,7 +59,7 @@ rem_dup.one <- function(x){
 }
 rem_dup.vector <- Vectorize(rem_dup.one,USE.NAMES = F)
 
-df_f <- df %>% 
+df_f <-  df %>% 
   mutate(combined_animals = paste0(animals_rep_seq, sep = ", ", animals_sc)) 
 
 df_f$combined_animals <- rem_dup.vector(df_f$combined_animals)
@@ -92,70 +98,11 @@ df_comb <- df_comb %>%
                                 "NP",
                                 ifelse(is.na(df_comb$NP) & !is.na(df_comb$SOL),
                                        "SOL", ""))))
-filtered <- df_comb %>% filter(Groups == "NP" & number_animals_combined >= 2)
-lc_all <- openxlsx::read.xlsx("~/Box Sync/RSV NGS/v4_Analysis/LCs/200828_LC_public.xlsx", sheet = 2)
+filtered <- df_comb %>% filter(number_animals_combined >= 2)
 
 
 ```
-## Plots and Statistics public clones NP group
-Data mining of the public clones found in >= 2 animals within the nanoparticle group.
 
-```{r plot_1, warning = FALSE}
-set.seed(10)
-df_comb$.id <- factor(df_comb$.id ,levels = c("PV", "B1", "B2"))
-g1 <- df_comb %>%
-  ggplot(aes(x = .id, y = number_animals_combined, size = size_rep_seq,
-             color = Groups)) +
-  geom_point(position = "jitter") +
-  scale_color_manual(values = c("#107F01","#065386", "#5C003C"))
-
-g2 <- g1 + theme_cowplot() + xlab("") +ylab("Number of animals") +
-  labs(size = "Clone size") + theme(legend.position = "right") +
-  scale_size_continuous(breaks = c (10, 100,1000,10000), limits = c(0,10000))+
-  scale_y_continuous(breaks = c(2,3,4,5,6,7,8,9)) 
-
-g3 <- g2 + geom_vline(xintercept=c(-3,1.5), linetype="dotted") +
-  geom_vline(xintercept=c(-3,2.5), linetype="dotted")
-
-#plotting with lines connecting the points
-df_comb_jit <- transform(df_comb, dmeasure =  jitter(as.numeric(as.factor(.id)), 2),
-jvalue = jitter(number_animals_combined, amount = .2) )
-
-g10 <- ggplot(df_comb_jit, aes(x = .id, y = jvalue, size = size_rep_seq, 
-                               color = Groups ) ) +
-  geom_blank() +
-  geom_line(aes(group = clone, x = dmeasure),color = "grey",size = 1, alpha = .4)+
-  geom_point( aes(x = dmeasure)) 
-g10 <- g10 + theme_cowplot() + xlab("") +ylab("Number of animals") +
-  labs(size = "Clone size") + theme(legend.position = "right") +
-  scale_color_manual(values = c("#107F01","#065386", "#5C003C"))+
-  scale_size_continuous(breaks = c (10, 100,1000,10000), limits = c(0,10000))+
-  scale_y_continuous(breaks = c(2,3,4,5,6,7,8,9)) + geom_vline(xintercept=c(-3,1.5), linetype="dotted") +
-  geom_vline(xintercept=c(-3,2.5), linetype="dotted")
-
-#plotting for the ones we have LCs
-df_comb_jit$sequence <- gsub("_HC_PostF|_HC_PreF+|_HC_PreF|_HC_DP|_HC_DP1|_HC_DP2",
-      "",df_comb_jit$sequence)
-ptn <- paste(lc_all$well,collapse="\\b|\\b")
-matches <- unique(grep(paste0("\\b", ptn,"\\b"), 
-                        df_comb_jit$sequence, value=TRUE))
-df_comb_jit_with_LC <- df_comb_jit[df_comb_jit$sequence %in% matches]
-
-g11 <- ggplot(df_comb_jit_with_LC, aes(x = .id, y = jvalue, size = size_rep_seq, 
-                               color = Groups ) ) +
-  geom_blank() +
-  geom_line(aes(group = clone, x = dmeasure),color = "grey",size = 1, alpha = .4)+
-  geom_point( aes(x = dmeasure)) 
-g11 <- g11 + theme_cowplot() + xlab("") +ylab("Number of animals") +
-  labs(size = "Clone size") + theme(legend.position = "right") +
-  scale_color_manual(values = c("#107F01","#065386", "#5C003C"))+
-  scale_size_continuous(breaks = c (10, 100,1000,10000), limits = c(0,10000))+
-  scale_y_continuous(breaks = c(2,3,4,5,6,7,8,9)) + geom_vline(xintercept=c(-3,1.5), linetype="dotted") +
-  geom_vline(xintercept=c(-3,2.5), linetype="dotted")
-
-
-gridExtra::grid.arrange(g10, g11, nrow = 1)
-```
 
 
 ```{r data_prep}
@@ -179,7 +126,7 @@ print(ls)
     x_m_full <- x_all %>% 
       mutate(grp = cumsum(grepl("Query",name))) %>%
       group_by(grp) %>% 
-      mutate(clonoquery = ifelse(row_number() > 1, first(name), name)) %>%
+      mutate(clonoquery = ifelse(row_number() > 1, dplyr::first(name), name)) %>%
       ungroup() %>% 
       select(-c(grp)) %>%
       relocate(clonoquery) %>%
@@ -211,77 +158,44 @@ combined_full  <- combined_full %>% rename(time_point = .id) %>% filter(count > 
 filtered_np <- merge(filtered, combined_full, by = "clone")
 filtered_np <- filtered_np %>%
   mutate(E11_and_E16 = ifelse(grepl("^E11, E16$",combined_animals),"YES", "NO"))
+filtered$clone %in% combined_full$clone
 
 ```
 
-```{r plot_3}
-
-filtered_grouped <- filtered_np %>% group_by(clone) %>% add_tally %>% summarise_all(list(mean), na.rm = TRUE) 
-
-
-filtered_grouped_bar_plot <- filtered_np %>% 
-  mutate(spec = ifelse(grepl("(?=.*DP)(?=.*PreF)", sequence, perl = T), "Both",ifelse(grepl("PreF",sequence, perl = T), "PreF", "DP"))) %>%
-  group_by(combined_animals, clone, spec, E11_and_E16) %>% tally() %>% 
-  group_by(E11_and_E16, spec) %>% tally()
-
-filtered_grouped_bar_plot %>% ggplot(aes(x = E11_and_E16, y = n, fill = spec)) + 
-  geom_bar(stat = "identity", position = "dodge", width = .5) + theme_cowplot()
-
-
-#filtered_grouped_nona <- filtered_grouped %>% select(where(~!all(is.na(.)))) %>%   select(-c(FR1_SHM,FR2_SHM,FR3_SHM, FR4_SHM, FR1_aa_mut,FR2_aa_mut,FR3_aa_mut))
-
-#library(PCAtools)
-#metadata <- data.frame(filtered_grouped_nona$combined_animals)
-#colnames(metadata) <- "combined_animals"
-#rownames(metadata)
-#rownames(metadata) 
-#x <- as.matrix(select_if(filtered_grouped_nona[,-1], is.numeric))
-#rownames(x) <- filtered_grouped_nona$combined_animals
-
-#p <- PCAtools::pca(x)
-#biplot(p)
-
-
-#pairs(x)
-#tiff("~/Box Sync/public_repertoire/results/pair_plot.tiff")
-#heatmap(x, scale = "column")
-
-#ggpairs(filtered_grouped_nona, columns = 4:21, 
- #       ggplot2::aes(colour=E11_and_E16, alpha = 0.7)) 
-
-```
-```{r plot_4}
+```{r plot_4, eval=FALSE}
 set.seed(50)
-filtered_to_fasta <- filtered_np %>% group_by(clone) %>% sample_n(size = 1) %>% select(clone,VDJ_nt, VDJ_aa)
+filtered_to_fasta <- filtered_np %>% group_by(clone) %>% sample_n(size = 1) %>% select(clone,VDJ_nt, VDJ_aa, .id)
 
-filtered_to_fasta_nt <- filtered_to_fasta %>% select(clone,VDJ_nt)
+filtered_to_fasta_nt <- filtered_to_fasta %>% select(clone,VDJ_nt) %>% as.data.frame()
 
-filtered_to_fasta_aa <- filtered_to_fasta %>% select(clone,VDJ_aa)
+filtered_to_fasta_aa <- filtered_to_fasta %>% select(clone,VDJ_aa) %>% as.data.frame()
 
-library(seqRFLP)
+
 dataframe2fas(filtered_to_fasta_nt, "~/Box Sync/public_repertoire/results/2020-10-05/public-clones_nt.fasta")
 dataframe2fas(filtered_to_fasta_aa, "~/Box Sync/public_repertoire/results/2020-10-05/public-clones_aa.fasta")
 
-library(Biostrings)
-library(msa)
+
 p_nt <- readBStringSet("~/Box Sync/public_repertoire/results/2020-10-05/public-clones_nt.fasta")
 p_aa <- readBStringSet("~/Box Sync/public_repertoire/results/2020-10-05/public-clones_aa.fasta")
 
 p_nt_msa <- msaMuscle(p_nt, verbose = T, type = "dna")
-p_aa_msa <- msaMuscle(p_nt, verbose = T, type = "dna")
-class(p_aa_msa)
+p_aa_msa <- msaMuscle(p_aa, verbose = T, type = "protein")
+
 writeXStringSet(BStringSet(p_nt_msa), 
                 "~/Box Sync/public_repertoire/results/2020-10-05/public-clones_nt_msa.fasta")
-
 writeXStringSet(BStringSet(p_aa_msa), 
                 "~/Box Sync/public_repertoire/results/2020-10-05/public-clones_aa_msa.fasta")
 ```
 
-## Take environment snapshot 
-```{r}
-renv::snapshot()
-```
+```{r ploting_tree}
+t1 <- treeio::read.tree(
+  "~/Box Sync/public_repertoire/results/2020-10-05/nt_fastree_result.tre")
+str(t1)
+t2 <- ggtree(t1) +  geom_treescale(width = 0.1) + geom_tiplab(color = "firebrick") + 
+  geom_rootedge()
 
+
+```
 
 ## SessionInfo
 ```{r}
