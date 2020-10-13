@@ -9,13 +9,14 @@ knit: (function(inputFile, encoding) {
                             encoding = encoding, 
                             output_file = paste0(
                               xfun::sans_ext(inputFile), '_', Sys.Date(), '.html'),
-                                output_dir = "../results/lab_book/")})
+                                output_dir = "~/Box Sync/public_repertoire/results")})
 ---
 
 ```{r setup, include=FALSE}
+setwd("~/Box Sync/public_repertoire/results")
 knitr::opts_knit$set(echo = TRUE,
                      root.dir = getwd(),
-                     fig.width = 6, fig.height = 5,
+                     fig.width = 7, fig.height = 5,
                      warning = FALSE, 
                      message = FALSE)
 
@@ -97,10 +98,13 @@ lc_all <- openxlsx::read.xlsx("~/Box Sync/RSV NGS/v4_Analysis/LCs/200828_LC_publ
 
 
 ```
-## Plots and Statistics public clones NP group
-Data mining of the public clones found in >= 2 animals within the nanoparticle group.
 
-```{r plot_1, warning = FALSE}
+
+### Plot of all public clones (left) and the ones we have light chains (right)
+
+Public clones found in >= 2 animals across different timepoints.
+
+```{r plot_1, warning = FALSE, fig.align= 'center',echo=FALSE, fig.width=10}
 set.seed(10)
 df_comb$.id <- factor(df_comb$.id ,levels = c("PV", "B1", "B2"))
 g1 <- df_comb %>%
@@ -134,7 +138,7 @@ g10 <- g10 + theme_cowplot() + xlab("") +ylab("Number of animals") +
   geom_vline(xintercept=c(-3,2.5), linetype="dotted")
 
 #plotting for the ones we have LCs
-df_comb_jit$sequence <- gsub("_HC_PostF|_HC_PreF+|_HC_PreF|_HC_DP|_HC_DP1|_HC_DP2",
+df_comb_jit$sequence <- gsub("_HC_PostF|_HC_PreF+|_HC_PreF|_HC_DP|_HC_DP1|_HC_DP2|+",
       "",df_comb_jit$sequence)
 ptn <- paste(lc_all$well,collapse="\\b|\\b")
 matches <- unique(grep(paste0("\\b", ptn,"\\b"), 
@@ -158,12 +162,11 @@ gridExtra::grid.arrange(g10, g11, nrow = 1)
 ```
 
 
-```{r data_prep}
+```{r data_prep, echo = FALSE, warning = FALSE}
 #function to create clonoquery file first
 .clono_full <- function(z){
 ls <- list.files(z, full.names = T)
 ls <- grep("full.txt", ls, value = T)
-print(ls)
   if(length(ls) != 9) {
     stop("Folder not containing 9 files, please check the number of files or change the function to allow a different number of files.")
   }
@@ -214,10 +217,10 @@ filtered_np <- filtered_np %>%
 
 ```
 
-```{r plot_3}
+###  Number of clones within Nanoparticle group and present in E11 and E16 animals 
 
-filtered_grouped <- filtered_np %>% group_by(clone) %>% add_tally %>% summarise_all(list(mean), na.rm = TRUE) 
 
+```{r plot_3, echo = FALSE, warning=FALSE, fig.align= 'center'}
 
 filtered_grouped_bar_plot <- filtered_np %>% 
   mutate(spec = ifelse(grepl("(?=.*DP)(?=.*PreF)", sequence, perl = T), "Both",ifelse(grepl("PreF",sequence, perl = T), "PreF", "DP"))) %>%
@@ -225,7 +228,11 @@ filtered_grouped_bar_plot <- filtered_np %>%
   group_by(E11_and_E16, spec) %>% tally()
 
 filtered_grouped_bar_plot %>% ggplot(aes(x = E11_and_E16, y = n, fill = spec)) + 
-  geom_bar(stat = "identity", position = "dodge", width = .5) + theme_cowplot()
+  geom_bar(stat = "identity", size = .5, width = .3, color = "black") + theme_cowplot() +
+  scale_fill_viridis_d() +
+  labs(x = "Is it present in E11 and E16 only?",
+       y= "Nº of clones",
+       fill = "Specificity")
 
 
 #filtered_grouped_nona <- filtered_grouped %>% select(where(~!all(is.na(.)))) %>%   select(-c(FR1_SHM,FR2_SHM,FR3_SHM, FR4_SHM, FR1_aa_mut,FR2_aa_mut,FR3_aa_mut))
@@ -250,7 +257,29 @@ filtered_grouped_bar_plot %>% ggplot(aes(x = E11_and_E16, y = n, fill = spec)) +
  #       ggplot2::aes(colour=E11_and_E16, alpha = 0.7)) 
 
 ```
-```{r plot_4}
+
+
+### Number of clones per timepoints
+
+
+```{r plot_4, echo = FALSE, warning=FALSE,  fig.align= 'center'}
+
+filtered_grouped_4 <- merge(df_comb, combined_full, by = "clone")  %>% 
+  mutate(spec = ifelse(grepl("(?=.*DP)(?=.*PreF)", sequence, perl = T), "Both",ifelse(grepl("PreF",sequence, perl = T), "PreF", "DP"))) %>%
+  group_by(clone, spec, Groups,.id) %>% tally() 
+
+filtered_grouped_4 %>% ggplot(aes(x = spec, fill = Groups)) +
+  geom_bar(color = "black", size = .5) + theme_cowplot()  +
+  facet_wrap(.~.id) + 
+  scale_fill_manual(values = c("#107F01","#065386", "#5C003C")) +
+  xlab("") +
+  ylab("Nº of clones")
+  
+```
+
+
+
+```{r fasta_creation, eval= FALSE, echo = FALSE}
 set.seed(50)
 filtered_to_fasta <- filtered_np %>% group_by(clone) %>% sample_n(size = 1) %>% select(clone,VDJ_nt, VDJ_aa)
 
@@ -277,11 +306,59 @@ writeXStringSet(BStringSet(p_aa_msa),
                 "~/Box Sync/public_repertoire/results/2020-10-05/public-clones_aa_msa.fasta")
 ```
 
-## Take environment snapshot 
-```{r}
-renv::snapshot()
-```
 
+###  Nanoparticle group (only) by specificity, clone size, and animals
+
+The graph on the left includes all of the clones that are within the nanoparticle, while the graph on the right shows only the clones light chains are available. 
+
+
+```{r plot_6, echo = FALSE, warning = FALSE, fig.align= 'center', fig.width=10} 
+p10 <- filtered_np %>%  mutate(
+  spec = ifelse(grepl("(?=.*DP)(?=.*PreF)", sequence, perl = T), "Both",
+                ifelse(grepl("PreF",sequence, perl = T), "PreF", "DP"))) %>%
+  group_by(clone) %>% 
+  summarise_each(funs(if(is.numeric(.)) mean(., na.rm = TRUE) else dplyr::first(.)))
+  
+p11 <- p10 %>% ggplot(aes(CDR3_length, V_errors, 
+                    size = size_rep_seq, 
+                    fill = spec, 
+                    color = as.factor(number_animals_combined)))  + 
+  theme_cowplot()  + 
+  geom_point(shape = 21, stroke = 0.8) + 
+  scale_fill_viridis_d() +
+  scale_color_manual(values=c("grey", "black")) +
+  labs(x = "CDR3 length",
+       y = "V nucleotide errors",
+       color = "Nº of animals",
+       fill = "Specificity",
+       size = "Clone size")
+
+
+#### Checking the ones we have LCs ######
+p10$sequence <- gsub("_HC_PostF|_HC_PreF+|_HC_PreF|_HC_DP|_HC_DP1|_HC_DP2",
+      "",p10$sequence)
+ptn <- paste(lc_all$well,collapse="\\b|\\b")
+matches_p10 <- unique(grep(paste0("\\b", ptn,"\\b"), 
+                        p10$sequence, value=TRUE))
+p10_with_LC <- subset(p10,p10$sequence %in% matches_p10)
+
+p12 <- p10_with_LC %>% ggplot(aes(CDR3_length, V_errors, 
+                    size = size_rep_seq, 
+                    fill = spec, 
+                    color = as.factor(number_animals_combined)))  + 
+  theme_cowplot()  + 
+  geom_point(shape = 21, stroke = 0.8) + 
+  scale_fill_viridis_d() +
+  scale_color_manual(values=c("grey", "black")) +
+  labs(x = "CDR3 length",
+       y = "V nucleotide errors",
+       color = "Nº of animals",
+       fill = "Specificity",
+       size = "Clone size")
+
+gridExtra::grid.arrange(p11, p12, nrow = 1)
+
+```
 
 ## SessionInfo
 ```{r}

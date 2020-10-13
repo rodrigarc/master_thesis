@@ -40,6 +40,9 @@ library(seqRFLP)
 library(Biostrings)
 library(msa)
 library(treeio)
+library(ggtree)
+library(RColorBrewer)
+library(ggnewscale)
 
 ```
 
@@ -97,7 +100,8 @@ df_comb <- df_comb %>%
                          ifelse(!is.na(df_comb$NP) & is.na(df_comb$SOL),
                                 "NP",
                                 ifelse(is.na(df_comb$NP) & !is.na(df_comb$SOL),
-                                       "SOL", ""))))
+                                       "SOL", ""))),
+         E11_and_E16 = ifelse(grepl("^E11, E16$",combined_animals),"YES", "NO"))
 filtered <- df_comb %>% filter(number_animals_combined >= 2)
 
 
@@ -153,12 +157,12 @@ clonoquery_full_igm <- .clono_full(
 combined_full <- list(clonoquery_full_igm, clonoquery_full_B1, clonoquery_full_B2)
 names(combined_full) <- c("PV", "B1", "B2") 
 combined_full  <- rbindlist(combined_full, idcol = T, fill = T)  
-combined_full  <- combined_full %>% rename(time_point = .id) %>% filter(count > 0)
+combined_full  <- combined_full %>% dplyr::rename(time_point = .id) %>% filter(count > 0)
 
 filtered_np <- merge(filtered, combined_full, by = "clone")
 filtered_np <- filtered_np %>%
   mutate(E11_and_E16 = ifelse(grepl("^E11, E16$",combined_animals),"YES", "NO"))
-filtered$clone %in% combined_full$clone
+
 
 ```
 
@@ -187,14 +191,86 @@ writeXStringSet(BStringSet(p_aa_msa),
                 "~/Box Sync/public_repertoire/results/2020-10-05/public-clones_aa_msa.fasta")
 ```
 
+## Tree 
+
+
 ```{r ploting_tree}
-t1 <- treeio::read.tree(
-  "~/Box Sync/public_repertoire/results/2020-10-05/nt_fastree_result.tre")
-str(t1)
-t2 <- ggtree(t1) +  geom_treescale(width = 0.1) + geom_tiplab(color = "firebrick") + 
-  geom_rootedge()
+t1 <- treeio::read.tree( 
+  "~/Box Sync/public_repertoire/results/2020-10-05/aa_fastree_result.tre")
 
+t2 <- ggtree(t1) + geom_tiplab(align = T, size = 2)
 
+df_tree <- df_comb %>% group_by(clone) %>% 
+  mutate(PV = ifelse(.id == "PV", size_rep_seq, 0),
+         B1 = ifelse(.id == "B1", size_rep_seq, 0),
+         B2 = ifelse(.id == "B2", size_rep_seq, 0)) %>%
+  summarise_each(funs(if(is.numeric(.)) max(., na.rm = TRUE) else dplyr::first(.))) %>%
+  dplyr::rename(label = clone) %>%
+  select(label, PV,B1, B2, Groups, number_animals_combined, E11_and_E16) %>% 
+  filter(label != "P0508") %>% as.data.frame()
+rownames(df_tree) <- df_tree$label
+
+t2_h <- gheatmap(t2, df_tree[, "Groups", drop = FALSE], width = 0.5, color = "black", offset = 0.1) +
+  scale_fill_manual(breaks = c("Both", "NP", "SOL"), values = c("#107F01","#065386", "#5C003C"), "Groups")
+t3_h <- t2_h + new_scale_fill()
+t4_h <- gheatmap(t3_h, df_tree[, c("PV", "B1", "B2"), drop = FALSE], width = 0.5, offset = 0.1) +
+  scale_fill_gradient("Clone size (log10)", low = "white", high = "red", trans="pseudo_log")
+t5_h <- t4_h + new_scale_fill()
+t6_h <- gheatmap(t5_h, df_tree[, "number_animals_combined", drop = FALSE], width = 0.5, offset = 0.9) +
+  scale_fill_gradient("Number of animals", low = "white", high = "blue")
+
+t6_h
+t4_h
+
+combined_full <- combined_full %>% mutate(label = clone)
+v_gene <- merge(df_tree, combined_full, by = "label") %>% group_by(clone) %>%
+  summarise_each(funs(if(is.numeric(.)) max(., na.rm = TRUE) else dplyr::first(.))) %>% mutate(V_gene = gsub("-.*","", V_gene)) %>% relocate(label) %>% as.data.frame()
+rownames(v_gene) <- v_gene$label
+
+t_v <- ggtree(t1, layout = "circular") + geom_tiplab(size = 1.5, align = T)
+v_h <- gheatmap(t_v, v_gene[, "V_gene", drop = FALSE], width = 0.5, color = "black", offset = 1.1) +
+  scale_fill_manual(breaks = c("IGHV1", "IGHV2","IGHV3", "IGHV4", "IGHV5", "IGHV7"), values = brewer.pal(6, "Dark2"))
+v_h <- v_h + new_scale_fill()
+v_h2 <- gheatmap(v_h, v_gene[, "Groups", drop = FALSE], width = 0.5, color = "black", offset = 0.01) +
+  scale_fill_manual(breaks = c("Both", "NP", "SOL"), values = c("#107F01","#065386", "#5C003C"), "Groups")
+v_h2
+
+#t2_h <- gheatmap(t2, df_tree[, "E11_and_E16", drop = FALSE], width = 1, color = "black", offset = 0.1) +
+#  scale_fill_manual(breaks = c("YES", "NO"), values = c("red", "blue"), "Present E11 and E16 only")
+#t2_h
+
+```
+
+```{r testing, eval=FALSE}
+#####   TESTTING PLOTTING #######
+anole.tree<-read.tree("http://www.phytools.org/eqg2015/data/anole.tre")
+svl <- read.csv("http://www.phytools.org/eqg2015/data/svl.csv",
+    row.names=1)
+svl <- as.matrix(svl)[,1]
+fit <- phytools::fastAnc(anole.tree,svl,vars=TRUE,CI=TRUE)
+
+td <- data.frame(node = nodeid(anole.tree, names(svl)),
+               trait = svl)
+nd <- data.frame(node = names(fit$ace), trait = fit$ace)
+
+d <- rbind(td, nd)
+d$node <- as.numeric(d$node)
+tree <- full_join(anole.tree, d, by = 'node')
+ggtree(tree, layout = "rectangular", aes(color=trait), continuous = TRUE, yscale = "trait") + 
+    scale_color_viridis_c() + theme_minimal()
+
+library(ggimage)
+library(ggtree)
+url <- paste0("https://raw.githubusercontent.com/TreeViz/",             "metastyle/master/design/viz_targets_exercise/")
+
+x <- read.tree(paste0(url, "tree_boots.nwk"))
+info <- read.csv(paste0(url, "tip_data.csv"))
+
+p <- ggtree(x) %<+% info + xlim(-.1, 4)
+p2 <- p + geom_tiplab(offset = .6, hjust = .5) +
+    geom_tippoint(aes(shape = trophic_habit, color = trophic_habit, size = mass_in_kg)) + 
+    theme(legend.position = "right") + scale_size_continuous(range = c(3, 10))
+p2
 ```
 
 ## SessionInfo
