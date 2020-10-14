@@ -146,19 +146,25 @@ matches <- unique(grep(paste0("\\b", ptn,"\\b"),
 df_comb_jit_with_LC <- df_comb_jit[df_comb_jit$sequence %in% matches]
 
 g11 <- ggplot(df_comb_jit_with_LC, aes(x = .id, y = jvalue, size = size_rep_seq, 
-                               color = Groups ) ) +
+                               color = Groups, label = clone ) ) +
   geom_blank() +
   geom_line(aes(group = clone, x = dmeasure),color = "grey",size = 1, alpha = .4)+
   geom_point( aes(x = dmeasure)) 
+
 g11 <- g11 + theme_cowplot() + xlab("") +ylab("Number of animals") +
   labs(size = "Clone size") + theme(legend.position = "right") +
   scale_color_manual(values = c("#107F01","#065386", "#5C003C"))+
   scale_size_continuous(breaks = c (10, 100,1000,10000), limits = c(0,10000))+
   scale_y_continuous(breaks = c(2,3,4,5,6,7,8,9)) + geom_vline(xintercept=c(-3,1.5), linetype="dotted") +
-  geom_vline(xintercept=c(-3,2.5), linetype="dotted")
+  geom_vline(xintercept=c(-3,2.5), linetype="dotted") +
+  geom_text(aes(x = dmeasure,label=ifelse(number_animals_combined >= 5,as.character(clone),'')),
+            size = 2, 
+            color = "black", 
+            fontface = 2, nudge_y = 0.2)
 
 
 gridExtra::grid.arrange(g10, g11, nrow = 1)
+
 ```
 
 
