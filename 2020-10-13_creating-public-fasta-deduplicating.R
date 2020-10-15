@@ -1,8 +1,10 @@
 library(data.table)
 library(seqRFLP)
 library(Biostrings)
+library(stringr)
 library(dplyr)
 library(stringr)
+library(tidyr)
 
 ##creating the df_comb and combined full (combining que full clonoquery)
 setwd("~/Box Sync/public_repertoire/results/2020-09-13/")
@@ -121,9 +123,12 @@ combined_full  <- rbindlist(combined_full, idcol = T, fill = T)
 combined_full  <- combined_full %>% 
   rename(time_point = .id) %>% 
   filter(count > 0) %>%
-  mutate(full_ID = paste0(clone, ID, time_point,))
-  
-
+  mutate(full_ID_2 = make.unique(paste(clone, ID, time_point,sep = "_"), sep = "_")) %>%
+  mutate(unique = paste0("s",sprintf("%04s",substring(full_ID_2,14,20)))) %>% 
+  mutate(full_ID = paste(clone, ID, time_point, unique,sep = "_")) 
+### save this reference table ###  
+#write.csv(combined_full, "~/Box Sync/RSV NGS/v4_Analysis/v4_public-repertoire/analysis/v4/results/2020-10-15/clone_reference_table_alignment.csv",
+#          row.names = F)
 
 ######selecting public clones #######
 df_comb_selection <- df_comb_jit_with_LC %>% filter(number_animals_combined >= 5)
@@ -131,25 +136,25 @@ p_clone_selection <- unique(df_comb_selection$clone)
 p_clone_sequences <- combined_full[combined_full$clone %in% p_clone_selection]
 
 ##### reading files and deleting * character ######
-p_nt <- p_clone_sequences %>% select(name, VDJ_nt, clone) 
+p_nt <- p_clone_sequences %>% select(full_ID, VDJ_nt, clone) 
 p_nt$VDJ_nt <- gsub("\\*","", p_nt$VDJ_nt)
-w <- "~/Box Sync/RSV NGS/v4_Analysis/v4_public-repertoire/analysis/v4/results/2020-10-13/not_dedup/"
+w <- "~/Box Sync/RSV NGS/v4_Analysis/v4_public-repertoire/analysis/v4/results/2020-10-15/not_dedup/"
 
-p_aa <- p_clone_sequences %>% select(name, VDJ_aa, clone)
+p_aa <- p_clone_sequences %>% select(full_ID, VDJ_aa, clone)
 p_aa$VDJ_aa <- gsub("\\*","", p_aa$VDJ_aa)
 
 #### loops for creating the fasta files out of the dataframes per clone"
 for (i in unique(p_nt$clone)){
-dataframe2fas(p_nt[p_nt$clone == i, c("name","VDJ_nt")], paste0( w, i,"_public_clones_5animals_nt.fasta"))
+dataframe2fas(p_nt[p_nt$clone == i, c("full_ID","VDJ_nt")], paste0( w, i,"_public_clones_5animals_nt.fasta"))
 }
 
 for (i in unique(p_aa$clone)){
-  dataframe2fas(p_aa[p_aa$clone == i, c("name","VDJ_aa")], paste0( w, i,"_public_clones_5animals_aa.fasta"))
+  dataframe2fas(p_aa[p_aa$clone == i, c("full_ID","VDJ_aa")], paste0( w, i,"_public_clones_5animals_aa.fasta"))
 }
 
 #### you can check the tables from this to check the number of repeated seqs
 
-ls <- list.files("~/Box Sync/RSV NGS/v4_Analysis/v4_public-repertoire/analysis/v4/results/2020-10-13/not_dedup/",full.names = T)
+ls <- list.files("~/Box Sync/RSV NGS/v4_Analysis/v4_public-repertoire/analysis/v4/results/2020-10-15/not_dedup/",full.names = T)
 ls_aa <- grep("aa", ls, value = T)
 ls_nt <- grep("nt", ls, value = T)
 
@@ -157,7 +162,6 @@ ls_nt <- grep("nt", ls, value = T)
 #### reading fasta files and deduplicating with loops
 fasta_aa <- sapply(ls_aa,readBStringSet,simplify = FALSE,USE.NAMES = TRUE)
 fasta_nt <- sapply(ls_nt,readBStringSet,simplify = FALSE,USE.NAMES = TRUE)
-
 
 
 fasta_aa_u <- lapply(fasta_aa, unique)
@@ -177,7 +181,7 @@ for (i in names(fasta_nt_d)){
   counts_l[[i]][["names"]] <- names(fasta_nt_u[[i]][n])
 }
 
-z <- "~/Box Sync/RSV NGS/v4_Analysis/v4_public-repertoire/analysis/v4/results/2020-10-13/dedup/"
+z <- "~/Box Sync/RSV NGS/v4_Analysis/v4_public-repertoire/analysis/v4/results/2020-10-15/dedup/"
 
 for (i in names(fasta_aa_u)){
   writeXStringSet(fasta_aa_u[[i]], paste0(z, i, "_dedup_public_clones_5animals_aa.fasta"))
