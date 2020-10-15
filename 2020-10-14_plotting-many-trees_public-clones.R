@@ -35,7 +35,9 @@ names(trees) <- names
 trees_gg <- lapply(trees, function(x) ggtree (x) + geom_tiplab(size = 0.2))
 
 for (i in names(trees_gg)){
-  trees_gg[[i]] + ggtitle(grep(i, names(trees_gg), value = T)) + 
+  trees_gg[[i]] + ggtitle(grep(i, names(trees_gg), value = T)) + geom_treescale()
   ggsave(paste0("~/Box Sync/RSV NGS/v4_Analysis/v4_public-repertoire/analysis/v4/results/2020-10-14/plot/",i,".pdf"),
          width = 40, height = 40, units = "cm")
 }
+
+trees_gg[[1]][["data"]][["label"]] == "M0549464000000000-CRY9F111011658514450"

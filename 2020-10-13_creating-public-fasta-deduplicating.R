@@ -85,7 +85,8 @@ df_comb_jit_with_LC <- df_comb_jit[df_comb_jit$sequence %in% matches]
     x <- lapply(ls, fread, fill = T)
     names(x) <- c("E11", "E12", "E14", "E16", "E17", "E18", "E21", "E23", "E24")
     x <- lapply(x, function (x) x[!apply(is.na(x) | x == "", 1, all),])       
-    x_all <- do.call(rbind, x)
+    x_all <- rbindlist(x, idcol = T)
+    x_all <- x_all %>% rename(ID = .id)
     #getting the clonoquery named properly, all clones queries, aka full table
     x_m_full <- x_all %>% 
       mutate(grp = cumsum(grepl("Query",name))) %>%
@@ -117,7 +118,11 @@ clonoquery_full_igm <- .clono_full(
 combined_full <- list(clonoquery_full_igm, clonoquery_full_B1, clonoquery_full_B2)
 names(combined_full) <- c("PV", "B1", "B2") 
 combined_full  <- rbindlist(combined_full, idcol = T, fill = T)  
-combined_full  <- combined_full %>% rename(time_point = .id) %>% filter(count > 0)
+combined_full  <- combined_full %>% 
+  rename(time_point = .id) %>% 
+  filter(count > 0) %>%
+  mutate(full_ID = paste0(clone, ID, time_point,))
+  
 
 
 ######selecting public clones #######
@@ -153,10 +158,24 @@ ls_nt <- grep("nt", ls, value = T)
 fasta_aa <- sapply(ls_aa,readBStringSet,simplify = FALSE,USE.NAMES = TRUE)
 fasta_nt <- sapply(ls_nt,readBStringSet,simplify = FALSE,USE.NAMES = TRUE)
 
+
+
 fasta_aa_u <- lapply(fasta_aa, unique)
 names(fasta_aa_u) <- c("P0049", "P0108", "P0254", "P0733", "P0741", "P0867", "P0913", "P1039", "P1123", "P2029")
 fasta_nt_u <- lapply(fasta_nt, unique)
 names(fasta_nt_u) <- c("P0049", "P0108", "P0254", "P0733", "P0741", "P0867", "P0913", "P1039", "P1123", "P2029")
+
+fasta_nt_d <- lapply(fasta_nt, function(x) x[duplicated(x)])
+names(fasta_nt_d) <- c("P0049", "P0108", "P0254", "P0733", "P0741", "P0867", "P0913", "P1039", "P1123", "P2029")
+
+duplicates <- list()
+counts_l <- list()
+for (i in names(fasta_nt_d)){
+  duplicates <- match(fasta_nt_d[[i]], fasta_nt_u[[i]])
+  counts_l[[i]] <- data.frame(table(duplicates))
+  n <- as.numeric(counts_l[[i]]$duplicates)
+  counts_l[[i]][["names"]] <- names(fasta_nt_u[[i]][n])
+}
 
 z <- "~/Box Sync/RSV NGS/v4_Analysis/v4_public-repertoire/analysis/v4/results/2020-10-13/dedup/"
 
@@ -206,6 +225,7 @@ fasta_aa_u_np <- lapply(fasta_aa_np, unique)
 names(fasta_aa_u_np) <- c("P0049", "P0108", "P0254", "P0733", "P0741", "P0867", "P0913", "P1039", "P1123", "P2029")
 fasta_nt_u_np <- lapply(fasta_nt_u_np, unique)
 names(fasta_nt_u) <- c("P0049", "P0108", "P0254", "P0733", "P0741", "P0867", "P0913", "P1039", "P1123", "P2029")
+
 
 z <- "~/Box Sync/RSV NGS/v4_Analysis/v4_public-repertoire/analysis/v4/results/2020-10-13/NP/"
 
