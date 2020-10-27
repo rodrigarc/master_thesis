@@ -210,7 +210,7 @@ p10 <- filtered_sol_spec %>%
   scale_fill_viridis_d() +
   theme_cowplot() +
   labs(x = "", y = "Clone size (%)", fill = "Specificity", title = "Public soluble repertoire")
-
+p10
 p11 <- filtered_np_spec %>% 
   ggplot(aes(x = V_gene, y = clone_percentage, fill = spec)) +
   geom_col(size = .1, width = .5, color = "Black") +
@@ -228,6 +228,8 @@ combined_full_v_gene <- combined_v_gene %>%  mutate(
          clone_percentage = (size_rep_seq/sum(size_rep_seq))*100) %>% 
   as.data.frame() 
 
+
+
 p12 <- combined_full_v_gene  %>% 
   ggplot(aes(x = V_gene, y = clone_percentage, fill = spec)) +
   geom_col(size = .1, width = .5, color = "Black") +
@@ -238,9 +240,18 @@ p12 <- combined_full_v_gene  %>%
 
 table_query <- read.csv("~/Box Sync/RSV NGS/v4_Analysis/v4_public-repertoire/merged_sc_clonotypes/2020-08-10_public_clonotypes_query_ref-table.csv", header = T) %>% rename(clone = Public.clonotype)
 
-comb_query <- merge(combined_full, table_query, by = "clone") %>% mutate(
-  spec = ifelse(grepl("(?=.*DP)(?=.*PreF)", name.y, perl = T), "Both",
+
+
+
+comb_query <- merge(combined_full, table_query, by = "clone") %>% 
+  mutate(spec = ifelse(grepl("(?=.*DP)(?=.*PreF)", name.y, perl = T), "Both",
                 ifelse(grepl("PreF",name.y, perl = T), "PreF", "DP")))
+
+##### add the clones that have both spec manually #####
+x <- combined_full_v_gene$clone[combined_full_v_gene$spec == "Both"]
+comb_query <- comb_query %>% mutate(spec = ifelse(clone %in% x,
+                                    "Both",
+                                    spec))
 
 
 p13 <- comb_query  %>% group_by(clone) %>% 
@@ -256,6 +267,7 @@ p14 <- p13 %>%  ggplot(aes(x = V_gene, y = clone_percentage,  fill = spec)) +
 
 
 gridExtra::grid.arrange(p14, p12, p11, p10, nrow = 1)
+gridExtra::grid.arrange(p14, p12, nrow = 1)
 
 ```
 
