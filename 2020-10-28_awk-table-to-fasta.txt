@@ -1,0 +1,15 @@
+### AWK to convert large tab files to fasta files
+
+cd ~/Box\ Sync/Ben\ Murrel \presentation/
+
+gzcat E16_B2_clean_aa.tab.gz | awk '{print ">"$1"\n"$2}' - >E16_B2_aa_fasta.txt
+gzcat E16_B2_clean_nt.tab.gz | awk '{print ">"$1"\n"$2}' - >E16_B2_nt_fasta.txt
+
+
+#### trying to remove the special characters (* symbol from IgDiscover) with AWK as well 
+gzcat filtered_tab/E16_B2_clean_nt.tab.gz | awk '{print ">"$1"\n"$2}' | awk '{gsub(/\"|\*/,"")}1' - >E16_B2_nt_fasta.txt
+
+gzcat filtered_tab/E16_B2_clean_aa.tab.gz | awk '{print ">"$1"\n"$2}' | awk '{gsub(/\"|\*/,"")}1' - >E16_B2_aa_fasta.txt
+
+
+ 
