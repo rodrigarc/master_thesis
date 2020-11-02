@@ -62,4 +62,18 @@ myplot + stat_pvalue_manual(stat.test, label = "p.adj.signif", bracket.nudge.y =
 
 
 ##create a new public_db
+id <- list.files("~/Box Sync/RSV NGS/Database comparison/")
+id <- id[!id %in% c("plot", "filtered_tabs", "Public.db")]
+id
+ls <- list()
+for(i in id) {
+  ls[[i]] <- list.files(paste0("~/Box Sync/RSV NGS/Database comparison/",i,"/database"), 
+                        full.names = T)
+  ls[[i]] <- grep("V.fasta", ls[[i]], value = T)
+  tabs_ind <- lapply(ls, readDNAStringSet)
+}
+
+tabs_comb <- do.call(c,tabs_ind)
+tabs_comb
+tabs_comb_sel <- tabs_comb %>% select(.id, name, V_SHM)
 
