@@ -1,0 +1,94 @@
+---
+title: ""
+author: "Rodrigo Arcoverde Cerveira"
+date: '`r format(Sys.Date(), "%Y-%m-%d")`'
+output: html_document
+abstract: Short project description.
+knit: (function(inputFile, encoding) {
+          rmarkdown::render(inputFile,
+                            encoding = encoding, 
+                            output_file = paste0(
+                              xfun::sans_ext(inputFile), '_', Sys.Date(), '.html'),
+                                output_dir = "~/Box Sync/public_repertoire/results")})
+---
+
+```{r setup, include=FALSE}
+setwd("~/Box Sync/")
+knitr::opts_knit$set(echo = TRUE,
+                     root.dir = getwd(),
+                     fig.width = 7, fig.height = 5,
+                     warning = FALSE, 
+                     message = FALSE)
+
+result.dir <- paste0("results/",Sys.Date(),"/")
+
+## creates result.dir with date in if not existent
+ifelse(isFALSE(dir.exists(paste0("../",result.dir))), dir.create(paste0("../",result.dir),recursive = TRUE),"Result directory for today exists already!")
+options(stringsAsFactors = FALSE) 
+```
+
+## Needed libraries
+```{r libraries, message=FALSE}
+library(Biostrings)
+library(dplyr)
+library(msa)
+library(ape)
+library(ggtree)
+library(ggplot2)
+```
+
+## Load data
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+##### CREATE TWO TREES 
+## NL + NGC
+## Cirelli + NL NGC
+
+V_nestor <- readDNAStringSet("~/Box Sync/RSV NGS/Database comparison/databases_uppmax/nestor-rm/V.fasta")
+NGCs <- readDNAStringSet("~/Box Sync/Rodrigo & Klara & Sebastian/Germlines/NGC candidates/NGCs_v7.fasta")
+
+NL <- grep("NL",names(V_nestor),value = T)
+V_nestor_NL <- V_nestor[NL]
+
+combined <- c(V_nestor_NL,NGCs)
+#writeXStringSet(combined, "~/Box Sync/RSV NGS/RSV/germline_dbs/V_nestor-NL_and_NGCS.fasta")
+algn <- msaMuscle(combined)
+algn <- BStringSet(algn)
+#writeXStringSet(algn, "~/Box Sync/RSV NGS/RSV/germline_dbs/V_nestor-NL_and_NGCS_muscle.fasta")
+
+tree <- treeio::read.tree("~/Box Sync/RSV NGS/RSV/germline_dbs/Nestor_db/V_nestor-NL_and_NGCS_muscle.tre")
+
+
+```
+
+## Print trees from FastTree
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+g <- ggtree(tree, layout = "rectangular", MAX_COUNT = 1)
+g+geom_tiplab(size = 0.8)
+g1 <- g$data %>% mutate(label2 = ifelse(grepl("NL", label),"NL",
+                                 ifelse(grepl("NGC", label), "NGC","")))
+
+g2 <- ggtree(g1, aes(color = label2)) +
+  geom_tippoint(size = .1) + 
+  ggtitle("Nestor NL vs NGCs")+
+  theme(legend.position="top",legend.text=element_text(size=25), 
+        legend.key.size = unit(6,"line"),
+        plot.title = element_text(size = 30, face = "bold")) + 
+  labs(color = "")+
+  scale_color_manual(values = c("black","red","blue"))+
+  geom_tiplab(size = .8, hjust = 0.1)+
+  geom_treescale(width = 0.05, x = .4)
+g2
+ggsave("~/Box Sync/RSV NGS/RSV/germline_dbs/Nestor_db/NL_NGC_tree.pdf",
+       width = 21, height = 29.7, 
+       units = "cm", limitsize = FALSE)
+NL_diverse <- na.omit(g$data[which(g$data$branch.length > 0.007),])
+NL_diverse$label
+```
+
+
+## SessionInfo
+```{r}
+sessionInfo()
+```
+
