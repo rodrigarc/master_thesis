@@ -1,0 +1,63 @@
+---
+title: "Untitled"
+author: "Rodrigo Arcoverde"
+date: "1/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(Biostrings)
+
+```
+
+## Concatenating all the heavy chain V germline sequences with one single J (IGHJ1-1*01)
+
+
+```{r }
+V_comb <- readDNAStringSet("/Users/karlor/Box Sync/RSV NGS/v4_Analysis/v4_Germlines/combined/combined.fasta")
+J <- readDNAStringSet("/Users/karlor/Box Sync/RSV NGS/v4_Analysis/v4_Germlines/combined/J.fasta")
+
+
+conca <- Map(c,V_comb, J)
+conca_dna <- DNAStringSet(conca)
+
+writeXStringSet(conca_dna, "~/Box Sync/rsv-sc/results/2020-01-25/2020-01-25_v4-germline-concac-same-J.fasta")
+
+
+```
+
+## Concatenating all the light chain V germline sequences with all the J
+```{r }
+V_comb_LC <- readDNAStringSet("/Users/karlor/Box Sync/IPD RSV/Results/P6-Germlines/Databases - FASTA files/Watson db - LC/V.FASTA")
+J_LC <- readDNAStringSet("/Users/karlor/Box Sync/IPD RSV/Results/P6-Germlines/Databases - FASTA files/Watson db - LC/J.FASTA")
+
+comb_conca <- list()
+for(i in names(J_LC)) {
+  conca_LC <- Map(c, V_comb_LC, J_LC[i])
+  comb_conca[i] <- DNAStringSet(conca_LC)
+  new_names_lc <- names(comb_conca[[i]])
+names(comb_conca[[i]]) <- paste0(new_names_lc, "-", i)
+}
+
+names_lc <- names(J_LC)
+comb_conca_c <- c(comb_conca[["IGKJ1.1"]],
+                  comb_conca[["IGKJ2.2"]],
+                  comb_conca[["IGKJ3.3"]],
+                  comb_conca[["IGKJ4.4"]],
+                  comb_conca[["IGKJ5.5"]],
+                  comb_conca[["IGLJ6.1"]],
+                  comb_conca[["IGLJ5.2"]],
+                  comb_conca[["IGLJ4.3"]],
+                  comb_conca[["IGLJ3.4"]],
+                  comb_conca[["IGLJ2.5"]],
+                  comb_conca[["IGLJ1.6"]],
+                  comb_conca[["IGLJ2.7"]]
+                  )
+writeXStringSet(comb_conca_c, "~/Box Sync/rsv-sc/results/2021-02-04/2021-02-04_v4-LC_germline-concac-all-J.fasta")
+
+J_LC
+V_comb_LC
+```
+
+

@@ -13,7 +13,6 @@ knit: (function(inputFile, encoding) {
 ---
 
 ```{r setup, include=FALSE}
-setwd("~/Box Sync/")
 knitr::opts_knit$set(echo = TRUE,
                      root.dir = getwd(),
                      fig.width = 7, fig.height = 5,
@@ -56,7 +55,7 @@ algn <- msaMuscle(combined)
 algn <- BStringSet(algn)
 #writeXStringSet(algn, "~/Box Sync/RSV NGS/RSV/germline_dbs/V_nestor-NL_and_NGCS_muscle.fasta")
 
-tree <- treeio::read.tree("~/Box Sync/RSV NGS/RSV/germline_dbs/Nestor_db/V_nestor-NL_and_NGCS_muscle.tre")
+tree <- treeio::read.tree("~/Box Sync/RSV NGS/RSV/germline_dbs/results/2020-11-20/2020-11-20_V_nestor-NL_and_NGCS_muscle.tre")
 
 
 ```
@@ -79,7 +78,8 @@ g2 <- ggtree(g1, aes(color = label2)) +
   geom_tiplab(size = .8, hjust = 0.1)+
   geom_treescale(width = 0.05, x = .4)
 g2
-ggsave("~/Box Sync/RSV NGS/RSV/germline_dbs/Nestor_db/NL_NGC_tree.pdf",
+
+ggsave(paste0("../", result.dir, Sys.Date(), "_", "NL_NGC_tree.pdf"),
        width = 21, height = 29.7, 
        units = "cm", limitsize = FALSE)
 NL_diverse <- na.omit(g$data[which(g$data$branch.length > 0.007),])
